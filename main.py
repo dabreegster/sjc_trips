@@ -1,9 +1,15 @@
 import csv
+import pandas as pd  # type: ignore
+import plotly.express as px  # type: ignore
 from typing import List
 from datetime import datetime, timedelta
 from dataclasses import dataclass
 from collections import defaultdict
 import click
+
+
+# This is some public Mapbox token I copied from somewhere. It works for me now, but it might eventually expire
+MAPBOX_TOKEN = "pk.eyJ1IjoibWFwYm94IiwiYSI6ImNpejY4NXVycTA2emYycXBndHRqcmZ3N3gifQ.rJcFIG214AriISLbB6B5aw"
 
 
 @click.command()
@@ -24,12 +30,26 @@ def ticketing_to_journeys(bil_path):
                 )
             )
 
+        # Draw a dot per starting location, coloring by the number of legs
+        dots: List[(float, float, int)] = []
+
         for card_id, events in per_card.items():
             journeys = split_into_journeys(card_id, events)
-            if len(journeys) > 1:
-                print(f"{card_id} does multiple journeys")
-                for j in journeys:
-                    print(f"  {j.legs}")
+            for journey in journeys:
+                # TODO latitude/longitude are already floats; not sure why we
+                # have to force that again. But without it, plotly blows up
+                dots.append(
+                    (
+                        float(journey.legs[0].latitude),
+                        float(journey.legs[0].longitude),
+                        len(journey.legs),
+                    )
+                )
+
+        px.set_mapbox_access_token(MAPBOX_TOKEN)
+        df = pd.DataFrame(dots, columns=["latitude", "longitude", "num_leg"])
+        fig = px.scatter_mapbox(df, lat="latitude", lon="longitude", color="num_leg")
+        fig.show()
 
 
 @dataclass
@@ -54,7 +74,9 @@ def split_into_journeys(card_id: str, events: List[TicketEvent]) -> List[Journey
     journeys = []
     current_journey = Journey(card_id, legs=[events[0]])
     for leg in events[1:]:
-        # TODO How's the two-hour window defined -- starting from the first event, or the most recent? (Can somebody ride for a total of 10 hours, with 90 minutes between each ticket?)
+        # TODO How's the two-hour window defined -- starting from the first
+        # event, or the most recent? (Can somebody ride for a total of 10
+        # hours, with 90 minutes between each ticket?)
         if len(current_journey.legs) < 4 and leg.date_time - current_journey.legs[
             0
         ].date_time < timedelta(hours=2):
