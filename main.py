@@ -1,6 +1,6 @@
 import csv
 from typing import List
-from datetime import datetime
+from datetime import datetime, timedelta
 from dataclasses import dataclass
 from collections import defaultdict
 import click
@@ -8,7 +8,7 @@ import click
 
 @click.command()
 @click.option("--bil_path", required=True, help="path to a bilhetagem CSV file.")
-def ticketing_to_trips(bil_path):
+def ticketing_to_journeys(bil_path):
     card_id = "NUMEROCARTAO"
 
     with open(bil_path) as f:
@@ -25,7 +25,11 @@ def ticketing_to_trips(bil_path):
             )
 
         for card_id, events in per_card.items():
-            trips = split_into_trips(events)
+            journeys = split_into_journeys(card_id, events)
+            if len(journeys) > 1:
+                print(f"{card_id} does multiple journeys")
+                for j in journeys:
+                    print(f"  {j.legs}")
 
 
 @dataclass
@@ -36,11 +40,32 @@ class TicketEvent:
     longitude: float
 
 
-def split_into_trips(events: List[TicketEvent]) -> List[List[TicketEvent]]:
-    print(events)
-    # TODO
-    return None
+@dataclass
+class Journey:
+    card_id: str
+    legs: List[TicketEvent]
+
+
+def split_into_journeys(card_id: str, events: List[TicketEvent]) -> List[Journey]:
+    """A passenger can board up to four buses in a two-hour window"""
+    events.sort(key=lambda event: event.date_time)
+
+    # TODO Can we just use fold?
+    journeys = []
+    current_journey = Journey(card_id, legs=[events[0]])
+    for leg in events[1:]:
+        # TODO How's the two-hour window defined -- starting from the first event, or the most recent? (Can somebody ride for a total of 10 hours, with 90 minutes between each ticket?)
+        if len(current_journey.legs) < 4 and leg.date_time - current_journey.legs[
+            0
+        ].date_time < timedelta(hours=2):
+            current_journey.legs.append(leg)
+        else:
+            journeys.append(current_journey)
+            current_journey = Journey(card_id, legs=[leg])
+    journeys.append(current_journey)
+
+    return journeys
 
 
 if __name__ == "__main__":
-    ticketing_to_trips()
+    ticketing_to_journeys()
