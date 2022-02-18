@@ -20,13 +20,13 @@ def ticketing_to_journeys(bil_path):
     with open(bil_path) as f:
         per_card = defaultdict(list)
         for row in csv.DictReader(f):
+            # We could preserve CODVEICULO and other fields if needed
             per_card[row[card_id]].append(
                 TicketEvent(
-                    # TODO Verify if the data is DD/MM or MM/DD
                     date_time=datetime.strptime(row["DATA"], "%d/%m/%Y %H:%M:%S"),
                     bus_line_code=row["CODLINHA"],
-                    latitude=row["LATITUDE"],
-                    longitude=row["LONGITUDE"],
+                    latitude=float(row["LATITUDE"]),
+                    longitude=float(row["LONGITUDE"]),
                 )
             )
 
@@ -36,12 +36,10 @@ def ticketing_to_journeys(bil_path):
         for card_id, events in per_card.items():
             journeys = split_into_journeys(card_id, events)
             for journey in journeys:
-                # TODO latitude/longitude are already floats; not sure why we
-                # have to force that again. But without it, plotly blows up
                 dots.append(
                     (
-                        float(journey.legs[0].latitude),
-                        float(journey.legs[0].longitude),
+                        journey.legs[0].latitude,
+                        journey.legs[0].longitude,
                         len(journey.legs),
                     )
                 )
