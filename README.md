@@ -25,6 +25,12 @@ To auto-format the code: `poetry run black main.py`
 
 To run the type-checker to detect possible problems: `poetry run mypy main.py`
 
+## Summary of recommendations
+
+1.  Transform raw data into a higher-level structure first
+2.  Dataframes / 2D tables are not always the best tool
+3.  Solve specific use cases, then try to generalize a solution later
+
 ## Methodology
 
 The input data represents people (with a unique `card_id`) tapping onto a bus.
