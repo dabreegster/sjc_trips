@@ -8,16 +8,58 @@ from collections import defaultdict
 import click
 
 
-# This is some public Mapbox token I copied from somewhere. It works for me now, but it might eventually expire
-MAPBOX_TOKEN = "pk.eyJ1IjoibWFwYm94IiwiYSI6ImNpejY4NXVycTA2emYycXBndHRqcmZ3N3gifQ.rJcFIG214AriISLbB6B5aw"
-
-
 @click.command()
 @click.option("--bil_path", required=True, help="path to a bilhetagem CSV file.")
 def ticketing_to_journeys(bil_path):
+    """Draw a dot per journey, showing each starting location and colored by the number of legs in the journey."""
+    dots = []
+    for journey in find_journeys(bil_path):
+        # TODO We could filter for journeys ending in a region
+        dots.append(
+            (
+                journey.legs[0].latitude,
+                journey.legs[0].longitude,
+                len(journey.legs),
+            )
+        )
+
+    # This is some public Mapbox token I copied from somewhere. It works for me
+    # now, but it might eventually expire
+    px.set_mapbox_access_token(
+        "pk.eyJ1IjoibWFwYm94IiwiYSI6ImNpejY4NXVycTA2emYycXBndHRqcmZ3N3gifQ.rJcFIG214AriISLbB6B5aw"
+    )
+    df = pd.DataFrame(dots, columns=["latitude", "longitude", "num_leg"])
+    fig = px.scatter_mapbox(df, lat="latitude", lon="longitude", color="num_leg")
+    fig.show()
+
+
+@dataclass
+class TicketEvent:
+    """One row from the bilhetagem CSV file, only keeping the fields we need."""
+
+    date_time: datetime
+    bus_line_code: str
+    latitude: float
+    longitude: float
+
+
+@dataclass
+class Journey:
+    """A journey on public transit made up of at least one leg."""
+
+    card_id: str
+    legs: List[TicketEvent]
+
+
+def find_journeys(bil_path: str) -> List[Journey]:
+    """Group ticket events from a CSV file into journeys."""
     card_id = "NUMEROCARTAO"
 
+    journeys = []
     with open(bil_path) as f:
+        # Note we collect everything in-memory. It's totally fine for the size
+        # of CSV files in the shared data. There are equivalent techniques to
+        # performantly handle huge datasets, if we ever need to.
         per_card = defaultdict(list)
         for row in csv.DictReader(f):
             # We could preserve CODVEICULO and other fields if needed
@@ -30,38 +72,10 @@ def ticketing_to_journeys(bil_path):
                 )
             )
 
-        # Draw a dot per starting location, coloring by the number of legs
-        dots: List[(float, float, int)] = []
-
         for card_id, events in per_card.items():
-            journeys = split_into_journeys(card_id, events)
-            for journey in journeys:
-                dots.append(
-                    (
-                        journey.legs[0].latitude,
-                        journey.legs[0].longitude,
-                        len(journey.legs),
-                    )
-                )
+            journeys.extend(split_into_journeys(card_id, events))
 
-        px.set_mapbox_access_token(MAPBOX_TOKEN)
-        df = pd.DataFrame(dots, columns=["latitude", "longitude", "num_leg"])
-        fig = px.scatter_mapbox(df, lat="latitude", lon="longitude", color="num_leg")
-        fig.show()
-
-
-@dataclass
-class TicketEvent:
-    date_time: datetime
-    bus_line_code: str
-    latitude: float
-    longitude: float
-
-
-@dataclass
-class Journey:
-    card_id: str
-    legs: List[TicketEvent]
+    return journeys
 
 
 def split_into_journeys(card_id: str, events: List[TicketEvent]) -> List[Journey]:
