@@ -1,6 +1,6 @@
 # Transit dataviz examples for São José dos Campos
 
-![Example output](num_legs_viz.png)
+![Example output](num_legs_viz.gif)
 
 This is a small example of how to transfom public transit ticketing data into a
 higher-level structure, and use the result for easier data visualization.
